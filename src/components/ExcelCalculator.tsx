@@ -37,6 +37,8 @@ export default function ExcelCalculator() {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string>('');
   const [chartData, setChartData] = useState<any[]>([]);
+  const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
   const { toast } = useToast();
 
   const processFile = useCallback((file: File) => {
@@ -123,6 +125,45 @@ export default function ExcelCalculator() {
     const file = e.target.files?.[0];
     if (file) {
       processFile(file);
+    }
+  };
+
+  const updateCell = (rowIndex: number, colIndex: number, newValue: string) => {
+    const updatedData = { ...sheetData };
+    const numValue = parseFloat(newValue);
+    
+    updatedData[activeSheet][rowIndex][colIndex] = {
+      value: isNaN(numValue) ? newValue : numValue,
+    };
+    
+    setSheetData(updatedData);
+    generateChartData(
+      updatedData[activeSheet].map(row => row.map(cell => cell.value))
+    );
+    
+    toast({
+      title: "Ячейка обновлена",
+      description: `Значение изменено на: ${newValue}`,
+    });
+  };
+
+  const handleCellClick = (rowIndex: number, colIndex: number) => {
+    setEditingCell({ row: rowIndex, col: colIndex });
+    setEditValue(String(currentData[rowIndex][colIndex].value));
+  };
+
+  const handleCellBlur = () => {
+    if (editingCell) {
+      updateCell(editingCell.row, editingCell.col, editValue);
+      setEditingCell(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleCellBlur();
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
     }
   };
 
@@ -248,18 +289,35 @@ export default function ExcelCalculator() {
                         <td className="border border-border p-2 text-xs font-semibold text-center bg-muted sticky left-0 z-10">
                           {rowIndex + 1}
                         </td>
-                        {row.map((cell, cellIndex) => (
-                          <td
-                            key={cellIndex}
-                            className="border border-border p-2 text-sm"
-                          >
-                            <div className="min-h-[20px]">
-                              {typeof cell.value === 'number' 
-                                ? cell.value.toLocaleString('ru-RU')
-                                : cell.value}
-                            </div>
-                          </td>
-                        ))}
+                        {row.map((cell, cellIndex) => {
+                          const isEditing = editingCell?.row === rowIndex && editingCell?.col === cellIndex;
+                          
+                          return (
+                            <td
+                              key={cellIndex}
+                              className="border border-border p-0 text-sm cursor-pointer hover:bg-primary/5 transition-colors"
+                              onClick={() => !isEditing && handleCellClick(rowIndex, cellIndex)}
+                            >
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onBlur={handleCellBlur}
+                                  onKeyDown={handleKeyDown}
+                                  className="w-full h-full p-2 bg-primary/10 border-2 border-primary outline-none"
+                                  autoFocus
+                                />
+                              ) : (
+                                <div className="min-h-[36px] p-2 flex items-center">
+                                  {typeof cell.value === 'number' 
+                                    ? cell.value.toLocaleString('ru-RU')
+                                    : cell.value}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
